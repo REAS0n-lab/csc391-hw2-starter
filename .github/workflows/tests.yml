@@ -1,0 +1,59 @@
+# Offline checks for the HW2 starter.
+#
+# The runner has no cluster, so this cannot test multi-node placement, which
+# is the thing most likely to be wrong. What it can do is build the C
+# benchmark against a real MPI installation and run it with two ranks on one
+# machine. That catches compile errors and MPI misuse. It does not catch a job
+# script that quietly puts both ranks on one node, and nothing here can.
+#
+# Every check is worth zero points.
+
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install MPI
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libopenmpi-dev openmpi-bin
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r env/requirements.txt
+
+      - name: Build the ping-pong benchmark
+        run: make -C pingpong
+
+      - name: Run it with two ranks
+        # --oversubscribe because the runner has fewer slots than ranks, and
+        # --allow-run-as-root because the container runs as root. Neither flag
+        # belongs in a Slurm job.
+        run: |
+          mpirun -n 2 --oversubscribe --allow-run-as-root \
+            ./pingpong/pingpong --trials 1 --warmup 2 --max-bytes 65536 \
+            --csv /tmp/ci-pingpong.csv
+          test -s /tmp/ci-pingpong.csv
+
+      - name: Fit the communication model
+        run: python scripts/fit_alpha_beta.py /tmp/ci-pingpong.csv
+
+      - name: Distributed SGD agrees with the serial gradient
+        run: |
+          mpirun -n 2 --oversubscribe --allow-run-as-root \
+            python src/dist_sgd.py --scale small --iters 5 --warmup 1 \
+            --repeat 1 --check-equivalence
+
+      - name: Offline tests
+        run: python -m pytest tests/test_offline.py -q
