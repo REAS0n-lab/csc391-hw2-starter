@@ -8,7 +8,7 @@ and the prediction record you fill in before the sweep runs.
 The training code works. The assignment is to predict what it will do on 1, 2,
 4, and 8 nodes, then explain where the prediction was wrong.
 
-**Opens Wednesday 9/23. Due Wednesday 10/7 at 2:00 p.m.**
+**Due Wednesday 10/14 at 11:59 p.m.**
 
 ## Layout
 
